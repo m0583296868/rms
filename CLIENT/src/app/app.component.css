@@ -1,0 +1,13 @@
+.custom-toolbar {
+  background-color: black;
+  color: white;
+  gap: 16px;
+}
+
+.ms {
+  color: #ffd500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 1.6rem;
+}

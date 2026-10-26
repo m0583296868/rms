@@ -1,0 +1,188 @@
+<main>
+  <section class="bar">
+    <mat-form-field appearance="outline">
+      <mat-label>מי מעדכן</mat-label>
+      <input matInput [(ngModel)]="changedBy" (change)="saveUser()" />
+    </mat-form-field>
+    <div class="summary" *ngIf="summary">
+      <span>סה״כ {{ summary.total }}</span>
+      @for (item of summary.byStatus; track item.key) {
+        <span>{{ labelStatus(item.key) }} {{ item.count }}</span>
+      }
+      @for (item of summary.byPriority; track item.key) {
+        <span>{{ labelPriority(item.key) }} {{ item.count }}</span>
+      }
+    </div>
+  </section>
+
+  <mat-card class="filters">
+    <mat-form-field appearance="outline">
+      <mat-label>חיפוש</mat-label>
+      <input matInput [formControl]="searchControl" placeholder="כותרת או ארגון" />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>סטטוס</mat-label>
+      <mat-select [(ngModel)]="status">
+        <mat-option value="">הכל</mat-option>
+        @for (item of statuses; track item) {
+          <mat-option [value]="item">{{ labelStatus(item) }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>עדיפות</mat-label>
+      <mat-select [(ngModel)]="priority">
+        <mat-option value="">הכל</mat-option>
+        @for (item of priorities; track item) {
+          <mat-option [value]="item">{{ labelPriority(item) }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>ארגון</mat-label>
+      <input matInput [(ngModel)]="organizationName" />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>מטפל</mat-label>
+      <input matInput [(ngModel)]="assignedTo" />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>מתאריך</mat-label>
+      <input matInput type="date" [(ngModel)]="from" />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>עד תאריך</mat-label>
+      <input matInput type="date" [(ngModel)]="to" />
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>מיון</mat-label>
+      <mat-select [(ngModel)]="sortBy">
+        @for (item of sortFields; track item.value) {
+          <mat-option [value]="item.value">{{ item.label }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field appearance="outline">
+      <mat-label>כיוון</mat-label>
+      <mat-select [(ngModel)]="sortDir">
+        <mat-option value="desc">יורד</mat-option>
+        <mat-option value="asc">עולה</mat-option>
+      </mat-select>
+    </mat-form-field>
+    <button mat-flat-button color="primary" (click)="applyFilters()">סנן</button>
+    <button mat-stroked-button (click)="clearFilters()">נקה</button>
+  </mat-card>
+
+  @if (loading) {
+    <div class="state"><mat-spinner diameter="36"></mat-spinner></div>
+  }
+  @if (error) {
+    <p class="error">{{ error }}</p>
+  }
+  @if (actionError) {
+    <p class="error">{{ actionError }}</p>
+  }
+  @if (!loading && !error && total === 0) {
+    <p class="state">אין פניות תואמות. אפשר לטעון נתוני בדיקה למטה.</p>
+  }
+
+  <div class="table-wrap">
+    <table mat-table [dataSource]="rows">
+      <ng-container matColumnDef="select">
+        <th mat-header-cell *matHeaderCellDef></th>
+        <td mat-cell *matCellDef="let row">
+          <mat-checkbox [checked]="selected.has(row.id)" (change)="toggle(row, $event.checked)"></mat-checkbox>
+        </td>
+      </ng-container>
+      <ng-container matColumnDef="id">
+        <th mat-header-cell *matHeaderCellDef>מזהה</th>
+        <td mat-cell *matCellDef="let row">{{ row.id }}</td>
+      </ng-container>
+      <ng-container matColumnDef="title">
+        <th mat-header-cell *matHeaderCellDef>כותרת</th>
+        <td mat-cell *matCellDef="let row">{{ row.title }}</td>
+      </ng-container>
+      <ng-container matColumnDef="organization">
+        <th mat-header-cell *matHeaderCellDef>ארגון</th>
+        <td mat-cell *matCellDef="let row">{{ row.organizationName }}</td>
+      </ng-container>
+      <ng-container matColumnDef="status">
+        <th mat-header-cell *matHeaderCellDef>סטטוס</th>
+        <td mat-cell *matCellDef="let row">{{ labelStatus(row.status) }}</td>
+      </ng-container>
+      <ng-container matColumnDef="priority">
+        <th mat-header-cell *matHeaderCellDef>עדיפות</th>
+        <td mat-cell *matCellDef="let row">{{ labelPriority(row.priority) }}</td>
+      </ng-container>
+      <ng-container matColumnDef="assigned">
+        <th mat-header-cell *matHeaderCellDef>מטפל</th>
+        <td mat-cell *matCellDef="let row">{{ row.assignedTo }}</td>
+      </ng-container>
+      <ng-container matColumnDef="updated">
+        <th mat-header-cell *matHeaderCellDef>עודכן</th>
+        <td mat-cell *matCellDef="let row">{{ row.updatedAt | date:'dd/MM/yyyy HH:mm' }}</td>
+      </ng-container>
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef>עדכון</th>
+        <td mat-cell *matCellDef="let row">
+          <div class="actions">
+            @if (nextStatuses(row.status).length > 0) {
+              <mat-form-field appearance="outline" class="small">
+                <mat-select [(ngModel)]="row.draftStatus">
+                  @for (item of nextStatuses(row.status); track item) {
+                    <mat-option [value]="item">{{ labelStatus(item) }}</mat-option>
+                  }
+                </mat-select>
+              </mat-form-field>
+              <button mat-stroked-button (click)="saveStatus(row)">עדכן</button>
+            }
+            <button mat-button (click)="toggleHistory(row.id)">היסטוריה</button>
+            <span class="ver">גרסה {{ row.version }}</span>
+          </div>
+          @if (conflictId === row.id) {
+            <div class="conflict">
+              הפנייה עודכנה על ידי משתמש אחר.
+              <button mat-button (click)="reload()">רענן</button>
+            </div>
+          }
+        </td>
+      </ng-container>
+      <tr mat-header-row *matHeaderRowDef="columns"></tr>
+      <tr mat-row *matRowDef="let row; columns: columns;"></tr>
+    </table>
+  </div>
+
+  <mat-paginator [length]="total" [pageIndex]="query.page - 1" [pageSize]="query.pageSize"
+    [pageSizeOptions]="[10, 20, 50, 100]" (page)="onPage($event)">
+  </mat-paginator>
+
+  <section class="bulk">
+    <span>עדכון מרוכז של המסומנות (עד 100). פנייה שנכשלת לא מבטלת את השאר.</span>
+    <mat-form-field appearance="outline">
+      <mat-label>סטטוס חדש</mat-label>
+      <mat-select [(ngModel)]="bulkStatus">
+        @for (item of statuses; track item) {
+          <mat-option [value]="item">{{ labelStatus(item) }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <button mat-flat-button color="primary" (click)="runBulk()" [disabled]="selected.size === 0">עדכן מסומנות</button>
+    @if (bulkMessage) { <span>{{ bulkMessage }}</span> }
+  </section>
+
+  @if (openHistoryId) {
+    <mat-card class="history">
+      <app-request-history [requestId]="openHistoryId" />
+    </mat-card>
+  }
+
+  <section class="seed">
+    <mat-form-field appearance="outline">
+      <mat-label>כמות נתוני בדיקה</mat-label>
+      <input matInput type="number" [(ngModel)]="seedCount" min="1" max="200000" />
+    </mat-form-field>
+    <button mat-stroked-button (click)="seed()" [disabled]="seeding">
+      {{ seeding ? 'טוען נתונים...' : 'צור נתוני בדיקה מחדש' }}
+    </button>
+  </section>
+</main>

@@ -1,0 +1,17 @@
+<h3>היסטוריית שינויים</h3>
+@if (loading) {
+  <mat-spinner diameter="28"></mat-spinner>
+}
+@if (error) {
+  <p class="error">{{ error }}</p>
+}
+@if (!loading && !error && rows.length === 0) {
+  <p>אין עדיין שינויי סטטוס לפנייה הזו.</p>
+}
+@for (row of rows; track row.id) {
+  <div class="line">
+    <span>מ-{{ label(row.previousStatus) }} ל-{{ label(row.newStatus) }}</span>
+    <span>{{ row.changedBy }}</span>
+    <span>{{ row.changedAt | date:'dd/MM/yyyy HH:mm' }}</span>
+  </div>
+}

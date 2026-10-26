@@ -1,0 +1,12 @@
+main { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.bar, .filters, .bulk, .seed, .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.filters, .history { padding: 12px; }
+.summary { display: flex; flex-wrap: wrap; gap: 8px; }
+.summary span { background: #fff; border: 1px solid #ddd; border-radius: 16px; padding: 4px 10px; }
+.table-wrap { overflow: auto; background: #fff; }
+table { width: 100%; }
+.state { display: flex; justify-content: center; padding: 12px; }
+.error, .conflict { color: #b00020; }
+.small { width: 130px; margin: 0; }
+.ver { color: #666; }
+.history { background: #fff; }
