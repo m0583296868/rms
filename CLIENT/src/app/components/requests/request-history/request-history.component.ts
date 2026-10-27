@@ -3,10 +3,11 @@ import { CommonModule } from '@angular/common';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { RequestsService } from '../../../Service/requests.service';
 import { StatusHistoryItem } from '../../../Models/request.model';
+import { IsraelTimePipe } from '../../../israel-time.pipe';
 
 @Component({
   selector: 'app-request-history',
-  imports: [CommonModule, MatProgressSpinnerModule],
+  imports: [CommonModule, MatProgressSpinnerModule, IsraelTimePipe],
   standalone: true,
   templateUrl: './request-history.component.html',
   styleUrl: './request-history.component.css'

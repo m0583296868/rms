@@ -16,6 +16,7 @@ import { MatTableModule } from '@angular/material/table';
 import { catchError, debounceTime, distinctUntilChanged, EMPTY, Subject, switchMap } from 'rxjs';
 import { RequestItem, RequestQuery, Summary } from '../../../Models/request.model';
 import { RequestsService } from '../../../Service/requests.service';
+import { IsraelTimePipe } from '../../../israel-time.pipe';
 import { RequestHistoryComponent } from '../request-history/request-history.component';
 
 @Component({
@@ -24,7 +25,7 @@ import { RequestHistoryComponent } from '../request-history/request-history.comp
     CommonModule, FormsModule, ReactiveFormsModule, MatButtonModule, MatCardModule,
     MatCheckboxModule, MatFormFieldModule, MatIconModule, MatInputModule,
     MatPaginatorModule, MatProgressSpinnerModule, MatSelectModule, MatTableModule,
-    RequestHistoryComponent
+    RequestHistoryComponent, IsraelTimePipe
   ],
   standalone: true,
   templateUrl: './list-requests.component.html', 

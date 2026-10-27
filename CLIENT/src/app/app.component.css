@@ -1,13 +1,39 @@
-.custom-toolbar {
-  background-color: black;
-  color: white;
-  gap: 16px;
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  padding: 14px 28px;
+  color: #fff;
+  background: linear-gradient(270deg, #0a3d82 0%, #1565c0 52%, #29b6f6 100%);
+  box-shadow: 0 10px 28px rgba(10, 61, 130, 0.28);
 }
 
-.ms {
-  color: #ffd500;
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.mark {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 1.6rem;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #e1f5fe;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
+
+.titles {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.titles strong { font-size: 1.15rem; font-weight: 700; }
+.titles span { font-size: 0.82rem; color: #d7f1ff; }

@@ -82,6 +82,11 @@ namespace RMS.DAL
             return rmsDBContext.requests.FirstOrDefaultAsync(r => r.Id == id, ct);
         }
 
+        public Task<List<Requests>> GetByIds(IReadOnlyCollection<int> ids, CancellationToken ct)
+        {
+            return rmsDBContext.requests.Where(r => ids.Contains(r.Id)).ToListAsync(ct);
+        }
+
         public async Task<SummaryDto> GetSummary(CancellationToken ct)
         {
             var byStatus = await rmsDBContext.requests.AsNoTracking()
@@ -116,8 +121,25 @@ namespace RMS.DAL
 
         public async Task UpdateStatus(Requests entity, RequestStatus newStatus, int expectedVersion, string changedBy, CancellationToken ct)
         {
-            var previous = entity.Status;
+            ApplyStatusChange(entity, newStatus, expectedVersion, changedBy, DateTime.UtcNow);
+            await rmsDBContext.SaveChangesAsync(ct);
+        }
+
+        public async Task UpdateStatuses(IReadOnlyList<RequestStatusChange> changes, string changedBy, CancellationToken ct)
+        {
+            if (changes.Count == 0)
+                return;
+
             var now = DateTime.UtcNow;
+            foreach (var change in changes)
+                ApplyStatusChange(change.Entity, change.NewStatus, change.ExpectedVersion, changedBy, now);
+
+            await rmsDBContext.SaveChangesAsync(ct);
+        }
+
+        private void ApplyStatusChange(Requests entity, RequestStatus newStatus, int expectedVersion, string changedBy, DateTime now)
+        {
+            var previous = entity.Status;
 
             rmsDBContext.Entry(entity).Property(r => r.Version).OriginalValue = expectedVersion;
             entity.Status = newStatus;
@@ -132,8 +154,6 @@ namespace RMS.DAL
                 ChangedAt = now,
                 ChangedBy = changedBy
             });
-
-            await rmsDBContext.SaveChangesAsync(ct);
         }
 
         public async Task<int> Seed(int count, bool reset, CancellationToken ct)

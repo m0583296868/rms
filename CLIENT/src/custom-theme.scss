@@ -5,9 +5,9 @@ html {
     color: (
       theme-type: light,
       primary: mat.$azure-palette,
-      tertiary: mat.$blue-palette,
+      tertiary: mat.$cyan-palette,
     ),
-    typography: Roboto,
+    typography: (plain-family: (Heebo, sans-serif), brand-family: (Heebo, sans-serif)),
     density: 0,
   ));
 }

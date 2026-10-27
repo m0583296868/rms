@@ -17,20 +17,17 @@ namespace RMS.BL
         private readonly IRequestDal requestDal;
         private readonly IMapper mapper;
         private readonly IMemoryCache cache;
-        private readonly IServiceScopeFactory scopeFactory;
         private readonly ILogger<RequestService> logger;
 
         public RequestService(
             IRequestDal requestDal,
             IMapper mapper,
             IMemoryCache cache,
-            IServiceScopeFactory scopeFactory,
             ILogger<RequestService> logger)
         {
             this.requestDal = requestDal;
             this.mapper = mapper;
             this.cache = cache;
-            this.scopeFactory = scopeFactory;
             this.logger = logger;
         }
 
@@ -112,29 +109,67 @@ namespace RMS.BL
                 throw new AppValidationException("אותה פנייה מופיעה פעמיים בבקשה");
             if (string.IsNullOrWhiteSpace(dto.ChangedBy))
                 throw new AppValidationException("יש להזין מי ביצע את העדכון");
+            if (dto.ChangedBy.Trim().Length > 100)
+                throw new AppValidationException("יש להזין שם מבצע עד 100 תווים");
 
+            var changedBy = dto.ChangedBy.Trim();
+            var entities = await requestDal.GetByIds(dto.Items.Select(i => i.Id).ToList(), ct);
+            var byId = entities.ToDictionary(r => r.Id);
             var result = new BulkStatusResultDto();
+            var changes = new List<RequestStatusChange>();
+
             foreach (var item in dto.Items)
             {
-                using var scope = scopeFactory.CreateScope();
-                var dal = scope.ServiceProvider.GetRequiredService<IRequestDal>();
-                try
+                if (!StatusRules.TryParseStatus(item.Status, out var newStatus))
                 {
-                    var updated = await UpdateOne(dal, item.Id, item.Status, item.Version, dto.ChangedBy, ct);
-                    result.Succeeded.Add(mapper.Map<RequestDto>(updated));
+                    result.Failed.Add(new BulkFailureDto { Id = item.Id, Reason = "סטטוס לא חוקי" });
+                    continue;
                 }
-                catch (NotFoundException)
+                if (item.Version < 1)
+                {
+                    result.Failed.Add(new BulkFailureDto { Id = item.Id, Reason = "גרסה לא תקינה" });
+                    continue;
+                }
+                if (!byId.TryGetValue(item.Id, out var entity))
                 {
                     result.Failed.Add(new BulkFailureDto { Id = item.Id, Reason = "NotFound" });
+                    continue;
                 }
-                catch (ConflictException)
+                if (entity.Version != item.Version)
                 {
                     result.Failed.Add(new BulkFailureDto { Id = item.Id, Reason = "Conflict" });
+                    continue;
                 }
-                catch (AppValidationException ex)
+                if (!StatusRules.CanMove(entity.Status, newStatus))
                 {
-                    result.Failed.Add(new BulkFailureDto { Id = item.Id, Reason = ex.Message });
+                    result.Failed.Add(new BulkFailureDto { Id = item.Id, Reason = $"לא ניתן לעבור מסטטוס {entity.Status} לסטטוס {newStatus}" });
+                    continue;
                 }
+
+                changes.Add(new RequestStatusChange(entity, newStatus, item.Version));
+            }
+
+            try
+            {
+                await requestDal.UpdateStatuses(changes, changedBy, ct);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                foreach (var change in changes)
+                    result.Failed.Add(new BulkFailureDto { Id = change.Entity.Id, Reason = "Conflict" });
+
+                logger.LogInformation(
+                    "Bulk status update succeeded {Ok} failed {Fail}",
+                    result.Succeeded.Count, result.Failed.Count);
+                return result;
+            }
+
+            foreach (var change in changes)
+            {
+                logger.LogInformation(
+                    "Request {Id} moved to {Status} by {User}",
+                    change.Entity.Id, change.NewStatus, changedBy);
+                result.Succeeded.Add(mapper.Map<RequestDto>(change.Entity));
             }
 
             if (result.Succeeded.Count > 0)

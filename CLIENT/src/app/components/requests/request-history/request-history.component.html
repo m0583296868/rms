@@ -12,6 +12,6 @@
   <div class="line">
     <span>מ-{{ label(row.previousStatus) }} ל-{{ label(row.newStatus) }}</span>
     <span>{{ row.changedBy }}</span>
-    <span>{{ row.changedAt | date:'dd/MM/yyyy HH:mm' }}</span>
+    <span>{{ row.changedAt | israelTime }}</span>
   </div>
 }
