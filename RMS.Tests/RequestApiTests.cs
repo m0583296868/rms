@@ -148,38 +148,153 @@ namespace RMS.Tests
         }
 
         [Fact]
-        public async Task ParallelUpdates_OnlyOneSucceeds_AndHistoryIsSingle()
+        public async Task ParallelUpdates_DifferentTargets_KeepOneVersionAndOneHistory()
         {
             var rows = await SeedSample();
             var id = rows.First(r => r.Status == RequestStatus.New).Id;
-            var body = new UpdateStatusDto { Status = "InProgress", Version = 1, ChangedBy = "דנה כהן" };
-            var gate = new Barrier(2);
-            TestSaveInterceptor.Gate = gate;
+            var results = await RunTogether(
+                () => client.PutAsJsonAsync($"/api/Request/{id}/status", new UpdateStatusDto
+                {
+                    Status = "InProgress",
+                    Version = 1,
+                    ChangedBy = "דנה כהן"
+                }),
+                () => client.PutAsJsonAsync($"/api/Request/{id}/status", new UpdateStatusDto
+                {
+                    Status = "Waiting",
+                    Version = 1,
+                    ChangedBy = "יוסי לוי"
+                }));
 
-            HttpResponseMessage[] results;
-            try
-            {
-                results = await Task.WhenAll(
-                    client.PutAsJsonAsync($"/api/Request/{id}/status", body),
-                    client.PutAsJsonAsync($"/api/Request/{id}/status", body));
-            }
-            finally
-            {
-                TestSaveInterceptor.Gate = null;
-                gate.Dispose();
-            }
-
-            var codes = results.Select(r => r.StatusCode).OrderBy(c => c).ToArray();
-            Assert.Equal(new[] { HttpStatusCode.OK, HttpStatusCode.Conflict }, codes);
+            var winner = results.Single(r => r.StatusCode == HttpStatusCode.OK);
+            var loser = results.Single(r => r.StatusCode == HttpStatusCode.Conflict);
+            var winnerBody = await winner.Content.ReadFromJsonAsync<RequestDto>(Json);
+            var problem = await loser.Content.ReadFromJsonAsync<ProblemBody>(Json);
+            Assert.Contains("עודכנה", problem!.Detail);
 
             var current = await client.GetFromJsonAsync<RequestDto>($"/api/Request/{id}", Json);
-            Assert.Equal("InProgress", current!.Status);
-            Assert.Equal(2, current.Version);
+            Assert.Equal(2, current!.Version);
+            Assert.Equal(winnerBody!.Status, current.Status);
+            Assert.Contains(current.Status, new[] { "InProgress", "Waiting" });
 
             var history = await client.GetFromJsonAsync<List<StatusHistoryDto>>($"/api/Request/{id}/history", Json);
-            Assert.Single(history!);
-            Assert.Equal("New", history![0].PreviousStatus);
-            Assert.Equal("InProgress", history[0].NewStatus);
+            Assert.NotNull(history);
+            var saved = Assert.Single(history);
+            Assert.Equal("New", saved.PreviousStatus);
+            Assert.Equal(current.Status, saved.NewStatus);
+            Assert.Equal(current.Status == "InProgress" ? "דנה כהן" : "יוסי לוי", saved.ChangedBy);
+
+            var stale = await client.PutAsJsonAsync($"/api/Request/{id}/status", new UpdateStatusDto
+            {
+                Status = current.Status == "InProgress" ? "Waiting" : "InProgress",
+                Version = 1,
+                ChangedBy = "נועה ברק"
+            });
+            Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+
+            var afterStale = await client.GetFromJsonAsync<RequestDto>($"/api/Request/{id}", Json);
+            Assert.Equal(current.Status, afterStale!.Status);
+            Assert.Equal(2, afterStale.Version);
+        }
+
+        [Fact]
+        public async Task ParallelUpdates_DifferentRows_BothSucceed()
+        {
+            var rows = await SeedSample();
+            var news = rows.Where(r => r.Status == RequestStatus.New).Take(2).ToList();
+            var results = await RunTogether(
+                () => client.PutAsJsonAsync($"/api/Request/{news[0].Id}/status", new UpdateStatusDto
+                {
+                    Status = "InProgress",
+                    Version = 1,
+                    ChangedBy = "דנה כהן"
+                }),
+                () => client.PutAsJsonAsync($"/api/Request/{news[1].Id}/status", new UpdateStatusDto
+                {
+                    Status = "Waiting",
+                    Version = 1,
+                    ChangedBy = "יוסי לוי"
+                }));
+
+            Assert.All(results, response => Assert.Equal(HttpStatusCode.OK, response.StatusCode));
+
+            var first = await client.GetFromJsonAsync<RequestDto>($"/api/Request/{news[0].Id}", Json);
+            var second = await client.GetFromJsonAsync<RequestDto>($"/api/Request/{news[1].Id}", Json);
+            Assert.Equal("InProgress", first!.Status);
+            Assert.Equal(2, first.Version);
+            Assert.Equal("Waiting", second!.Status);
+            Assert.Equal(2, second.Version);
+
+            var firstHistory = await client.GetFromJsonAsync<List<StatusHistoryDto>>($"/api/Request/{news[0].Id}/history", Json);
+            var secondHistory = await client.GetFromJsonAsync<List<StatusHistoryDto>>($"/api/Request/{news[1].Id}/history", Json);
+            Assert.NotNull(firstHistory);
+            Assert.NotNull(secondHistory);
+            Assert.Equal("דנה כהן", Assert.Single(firstHistory).ChangedBy);
+            Assert.Equal("יוסי לוי", Assert.Single(secondHistory).ChangedBy);
+        }
+
+        [Fact]
+        public async Task ParallelBulkAndSingleUpdate_DoNotOverwriteEachOther()
+        {
+            var rows = await SeedSample();
+            var contested = rows.First(r => r.Status == RequestStatus.New);
+            var other = rows.First(r => r.Status == RequestStatus.Waiting);
+            var results = await RunTogether(
+                () => client.PutAsJsonAsync($"/api/Request/{contested.Id}/status", new UpdateStatusDto
+                {
+                    Status = "Waiting",
+                    Version = 1,
+                    ChangedBy = "דנה כהן"
+                }),
+                () => client.PostAsJsonAsync("/api/Request/bulk-status", new BulkStatusDto
+                {
+                    ChangedBy = "יוסי לוי",
+                    Items = new List<BulkStatusItemDto>
+                    {
+                        new() { Id = contested.Id, Status = "InProgress", Version = 1 },
+                        new() { Id = other.Id, Status = "Completed", Version = 1 }
+                    }
+                }));
+
+            results[1].EnsureSuccessStatusCode();
+            var bulk = await results[1].Content.ReadFromJsonAsync<BulkStatusResultDto>(Json);
+            var contestedNow = await client.GetFromJsonAsync<RequestDto>($"/api/Request/{contested.Id}", Json);
+            var otherNow = await client.GetFromJsonAsync<RequestDto>($"/api/Request/{other.Id}", Json);
+            var contestedHistory = await client.GetFromJsonAsync<List<StatusHistoryDto>>($"/api/Request/{contested.Id}/history", Json);
+            var otherHistory = await client.GetFromJsonAsync<List<StatusHistoryDto>>($"/api/Request/{other.Id}/history", Json);
+
+            Assert.NotNull(contestedNow);
+            Assert.NotNull(otherNow);
+            Assert.NotNull(contestedHistory);
+            Assert.NotNull(otherHistory);
+            Assert.NotNull(bulk);
+            Assert.Equal(2, contestedNow.Version);
+            var contestedSaved = Assert.Single(contestedHistory);
+            Assert.Equal(contestedNow.Status, contestedSaved.NewStatus);
+
+            if (results[0].StatusCode == HttpStatusCode.OK)
+            {
+                Assert.Equal("Waiting", contestedNow.Status);
+                Assert.Equal("דנה כהן", contestedSaved.ChangedBy);
+                Assert.Empty(bulk.Succeeded);
+                Assert.All(bulk.Failed, item => Assert.Equal("Conflict", item.Reason));
+                Assert.Equal("Waiting", otherNow.Status);
+                Assert.Equal(1, otherNow.Version);
+                Assert.Empty(otherHistory);
+            }
+            else
+            {
+                Assert.Equal(HttpStatusCode.Conflict, results[0].StatusCode);
+                Assert.Equal(2, bulk.Succeeded.Count);
+                Assert.Empty(bulk.Failed);
+                Assert.Equal("InProgress", contestedNow.Status);
+                Assert.Equal("יוסי לוי", contestedSaved.ChangedBy);
+                Assert.Equal("Completed", otherNow.Status);
+                Assert.Equal(2, otherNow.Version);
+                var otherSaved = Assert.Single(otherHistory);
+                Assert.Equal("Completed", otherSaved.NewStatus);
+                Assert.Equal("יוסי לוי", otherSaved.ChangedBy);
+            }
         }
 
         [Fact]
@@ -284,6 +399,23 @@ namespace RMS.Tests
             Assert.NotNull(after);
             Assert.Equal(CountOf(before, "New") - 1, CountOf(after, "New"));
             Assert.Equal(CountOf(before, "InProgress") + 1, CountOf(after, "InProgress"));
+        }
+
+        private async Task<HttpResponseMessage[]> RunTogether(
+            Func<Task<HttpResponseMessage>> first,
+            Func<Task<HttpResponseMessage>> second)
+        {
+            var gate = new Barrier(2);
+            TestSaveInterceptor.Gate = gate;
+            try
+            {
+                return await Task.WhenAll(first(), second());
+            }
+            finally
+            {
+                TestSaveInterceptor.Gate = null;
+                gate.Dispose();
+            }
         }
 
         private static int CountOf(SummaryDto summary, string key)
