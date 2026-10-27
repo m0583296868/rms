@@ -11,7 +11,7 @@
 @for (row of rows; track row.id) {
   <div class="line">
     <span>מ-{{ label(row.previousStatus) }} ל-{{ label(row.newStatus) }}</span>
-    <span>{{ row.changedBy }}</span>
-    <span>{{ row.changedAt | israelTime }}</span>
+    <span>עודכן ע"י {{ row.changedBy }}</span>
+    <span>ב-{{ row.changedAt | israelTime }}</span>
   </div>
 }

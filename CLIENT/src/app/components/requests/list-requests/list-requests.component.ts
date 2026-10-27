@@ -116,6 +116,12 @@ export class ListRequestsComponent implements OnInit {
     this.loadSummary();
   }
 
+  get hasFilter(): boolean {
+    const query = this.query;
+    return !!(query.status || query.priority || query.organizationName || query.assignedTo
+      || query.from || query.to || query.search);
+  }
+
   applyFilters() {
     this.query.page = 1;
     this.query.status = this.status;

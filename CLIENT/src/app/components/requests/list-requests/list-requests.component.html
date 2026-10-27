@@ -1,9 +1,5 @@
 <main>
   <section class="hero">
-    <mat-form-field appearance="outline" class="user-field">
-      <mat-label>מי מעדכן</mat-label>
-      <input matInput [(ngModel)]="changedBy" (change)="saveUser()" />
-    </mat-form-field>
     <div class="summary" *ngIf="summary">
       <article class="stat">
         <span>סה״כ פניות</span>
@@ -84,6 +80,18 @@
     </div>
   </mat-card>
 
+  @if (!loading && !error && hasFilter) {
+    <p class="result-count">
+      @if (total === 0) {
+        לא נמצאו רשומות שעונות על הסינון
+      } @else if (total === 1) {
+        נמצאה <strong>רשומה אחת</strong> שעונה על הסינון
+      } @else {
+        נמצאו <strong>{{ total }}</strong> רשומות שעונות על הסינון
+      }
+    </p>
+  }
+
   @if (loading) {
     <div class="state"><mat-spinner diameter="36"></mat-spinner></div>
   }
@@ -98,6 +106,12 @@
   }
 
   <section class="panel">
+  <div class="update-bar">
+    <mat-form-field appearance="outline" class="user-field">
+      <mat-label>מי מעדכן</mat-label>
+      <input matInput [(ngModel)]="changedBy" (change)="saveUser()" />
+    </mat-form-field>
+  </div>
   <div class="table-wrap">
     <table mat-table [dataSource]="rows">
       <ng-container matColumnDef="select">
