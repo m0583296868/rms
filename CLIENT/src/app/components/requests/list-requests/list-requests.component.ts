@@ -35,7 +35,7 @@ export class ListRequestsComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
   private loadRequests$ = new Subject<void>();
 
-  columns = ['select', 'id', 'title', 'organization', 'status', 'priority', 'assigned', 'updated', 'actions'];
+  columns = ['select', 'id', 'title', 'organization', 'status', 'priority', 'assigned','createdAt', 'updated', 'actions'];
   statuses = ['New', 'InProgress', 'Waiting', 'Completed'];
   priorities = ['Low', 'Medium', 'High'];
   sortFields = [

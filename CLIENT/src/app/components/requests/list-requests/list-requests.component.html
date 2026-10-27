@@ -118,6 +118,10 @@
         <th mat-header-cell *matHeaderCellDef>מטפל</th>
         <td mat-cell *matCellDef="let row">{{ row.assignedTo }}</td>
       </ng-container>
+      <ng-container matColumnDef="createdAt">
+        <th mat-header-cell *matHeaderCellDef>נוצר</th>
+        <td mat-cell *matCellDef="let row">{{ row.createdAt | date:'dd/MM/yyyy HH:mm' }}</td>
+      </ng-container>
       <ng-container matColumnDef="updated">
         <th mat-header-cell *matHeaderCellDef>עודכן</th>
         <td mat-cell *matCellDef="let row">{{ row.updatedAt | date:'dd/MM/yyyy HH:mm' }}</td>
@@ -134,8 +138,15 @@
                   }
                 </mat-select>
               </mat-form-field>
-              <button mat-stroked-button (click)="saveStatus(row)">עדכן</button>
+              @if(changedBy!=''){
+              <button mat-stroked-button (click)="saveStatus(row)"  >עדכן</button>
+              }
+              @else{
+               <button mat-stroked-button (click)="saveStatus(row)"  disabled>עדכן</button>
+
+              }
             }
+
             <button mat-button (click)="toggleHistory(row.id)">היסטוריה</button>
             <span class="ver">גרסה {{ row.version }}</span>
           </div>

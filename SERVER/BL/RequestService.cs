@@ -98,6 +98,8 @@ namespace RMS.BL
             return mapper.Map<RequestDto>(entity);
         }
 
+
+
         public async Task<BulkStatusResultDto> UpdateBulk(BulkStatusDto dto, CancellationToken ct)
         {
             if (dto == null)

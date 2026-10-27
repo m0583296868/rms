@@ -102,6 +102,7 @@ namespace RMS.DAL
             };
         }
 
+
         public Task<List<StatusHistories>> GetHistory(int requestId, CancellationToken ct)
         {
             return rmsDBContext.statusHistories.AsNoTracking()
@@ -110,6 +111,8 @@ namespace RMS.DAL
                 .ThenByDescending(h => h.Id)
                 .ToListAsync(ct);
         }
+
+
 
         public async Task UpdateStatus(Requests entity, RequestStatus newStatus, int expectedVersion, string changedBy, CancellationToken ct)
         {
