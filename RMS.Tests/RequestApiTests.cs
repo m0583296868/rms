@@ -127,6 +127,170 @@ namespace RMS.Tests
             Assert.Equal("NotFound", result.Failed[0].Reason);
         }
 
+        [Fact]
+        public async Task OrganizationFilter_MatchesThePrefix_SearchMatchesAnywhere()
+        {
+            await SeedSample();
+
+            var prefix = await client.GetFromJsonAsync<PagedResult<RequestDto>>(
+                "/api/Request?organizationName=" + Uri.EscapeDataString("רכבת") + "&pageSize=10", Json);
+            Assert.Equal(2, prefix!.TotalCount);
+            Assert.All(prefix.Items, item => Assert.StartsWith("רכבת", item.OrganizationName));
+
+            var insideName = await client.GetFromJsonAsync<PagedResult<RequestDto>>(
+                "/api/Request?organizationName=" + Uri.EscapeDataString("ישראל") + "&pageSize=10", Json);
+            Assert.Equal(0, insideName!.TotalCount);
+
+            var search = await client.GetFromJsonAsync<PagedResult<RequestDto>>(
+                "/api/Request?search=" + Uri.EscapeDataString("ישראל") + "&pageSize=10", Json);
+            Assert.Equal(3, search!.TotalCount);
+            Assert.All(search.Items, item => Assert.Contains("ישראל", item.OrganizationName));
+        }
+
+        [Fact]
+        public async Task ParallelUpdates_OnlyOneSucceeds_AndHistoryIsSingle()
+        {
+            var rows = await SeedSample();
+            var id = rows.First(r => r.Status == RequestStatus.New).Id;
+            var body = new UpdateStatusDto { Status = "InProgress", Version = 1, ChangedBy = "דנה כהן" };
+            var gate = new Barrier(2);
+            TestSaveInterceptor.Gate = gate;
+
+            HttpResponseMessage[] results;
+            try
+            {
+                results = await Task.WhenAll(
+                    client.PutAsJsonAsync($"/api/Request/{id}/status", body),
+                    client.PutAsJsonAsync($"/api/Request/{id}/status", body));
+            }
+            finally
+            {
+                TestSaveInterceptor.Gate = null;
+                gate.Dispose();
+            }
+
+            var codes = results.Select(r => r.StatusCode).OrderBy(c => c).ToArray();
+            Assert.Equal(new[] { HttpStatusCode.OK, HttpStatusCode.Conflict }, codes);
+
+            var current = await client.GetFromJsonAsync<RequestDto>($"/api/Request/{id}", Json);
+            Assert.Equal("InProgress", current!.Status);
+            Assert.Equal(2, current.Version);
+
+            var history = await client.GetFromJsonAsync<List<StatusHistoryDto>>($"/api/Request/{id}/history", Json);
+            Assert.Single(history!);
+            Assert.Equal("New", history![0].PreviousStatus);
+            Assert.Equal("InProgress", history[0].NewStatus);
+        }
+
+        [Fact]
+        public async Task Bulk_StaleAndMissing_DoNotCancelValidRows()
+        {
+            var rows = await SeedSample();
+            var stale = rows.First(r => r.Status == RequestStatus.InProgress);
+            var moved = await client.PutAsJsonAsync($"/api/Request/{stale.Id}/status", new UpdateStatusDto
+            {
+                Status = "Waiting",
+                Version = 1,
+                ChangedBy = "דנה כהן"
+            });
+            moved.EnsureSuccessStatusCode();
+
+            var validNew = rows.First(r => r.Status == RequestStatus.New);
+            var validWaiting = rows.First(r => r.Status == RequestStatus.Waiting);
+            var response = await client.PostAsJsonAsync("/api/Request/bulk-status", new BulkStatusDto
+            {
+                ChangedBy = "יוסי לוי",
+                Items = new List<BulkStatusItemDto>
+                {
+                    new() { Id = validNew.Id, Status = "InProgress", Version = 1 },
+                    new() { Id = validWaiting.Id, Status = "Completed", Version = 1 },
+                    new() { Id = stale.Id, Status = "Completed", Version = 1 },
+                    new() { Id = 999999, Status = "InProgress", Version = 1 }
+                }
+            });
+
+            response.EnsureSuccessStatusCode();
+            var result = await response.Content.ReadFromJsonAsync<BulkStatusResultDto>(Json);
+            Assert.Equal(2, result!.Succeeded.Count);
+            Assert.Contains(result.Failed, item => item.Id == stale.Id && item.Reason == "Conflict");
+            Assert.Contains(result.Failed, item => item.Id == 999999 && item.Reason == "NotFound");
+
+            var history = await client.GetFromJsonAsync<List<StatusHistoryDto>>($"/api/Request/{validNew.Id}/history", Json);
+            Assert.Single(history!);
+        }
+
+        [Fact]
+        public async Task Bulk_ConflictDuringSave_RollsBackEveryAcceptedRow()
+        {
+            var rows = await SeedSample();
+            var first = rows.First(r => r.Status == RequestStatus.New);
+            var second = rows.First(r => r.Status == RequestStatus.Waiting);
+            TestSaveInterceptor.ConflictRequestId = first.Id;
+
+            BulkStatusResultDto? result;
+            try
+            {
+                var response = await client.PostAsJsonAsync("/api/Request/bulk-status", new BulkStatusDto
+                {
+                    ChangedBy = "יוסי לוי",
+                    Items = new List<BulkStatusItemDto>
+                    {
+                        new() { Id = first.Id, Status = "InProgress", Version = 1 },
+                        new() { Id = second.Id, Status = "Completed", Version = 1 }
+                    }
+                });
+                response.EnsureSuccessStatusCode();
+                result = await response.Content.ReadFromJsonAsync<BulkStatusResultDto>(Json);
+            }
+            finally
+            {
+                TestSaveInterceptor.ConflictRequestId = 0;
+            }
+
+            Assert.Empty(result!.Succeeded);
+            Assert.Equal(2, result.Failed.Count);
+            Assert.All(result.Failed, item => Assert.Equal("Conflict", item.Reason));
+
+            var firstNow = await client.GetFromJsonAsync<RequestDto>($"/api/Request/{first.Id}", Json);
+            var secondNow = await client.GetFromJsonAsync<RequestDto>($"/api/Request/{second.Id}", Json);
+            Assert.Equal("New", firstNow!.Status);
+            Assert.Equal(1, firstNow.Version);
+            Assert.Equal("Waiting", secondNow!.Status);
+            Assert.Equal(1, secondNow.Version);
+
+            var history = await client.GetFromJsonAsync<List<StatusHistoryDto>>($"/api/Request/{second.Id}/history", Json);
+            Assert.Empty(history!);
+        }
+
+        [Fact]
+        public async Task Summary_AfterStatusChange_ReturnsUpdatedCounts()
+        {
+            await SeedSample();
+            var before = await client.GetFromJsonAsync<SummaryDto>("/api/Request/summary", Json);
+            var cached = await client.GetFromJsonAsync<SummaryDto>("/api/Request/summary", Json);
+            Assert.Equal(before!.Total, cached!.Total);
+
+            var page = await client.GetFromJsonAsync<PagedResult<RequestDto>>("/api/Request?status=New&pageSize=1", Json);
+            var row = page!.Items[0];
+            var update = await client.PutAsJsonAsync($"/api/Request/{row.Id}/status", new UpdateStatusDto
+            {
+                Status = "InProgress",
+                Version = row.Version,
+                ChangedBy = "דנה כהן"
+            });
+            update.EnsureSuccessStatusCode();
+
+            var after = await client.GetFromJsonAsync<SummaryDto>("/api/Request/summary", Json);
+            Assert.NotNull(after);
+            Assert.Equal(CountOf(before, "New") - 1, CountOf(after, "New"));
+            Assert.Equal(CountOf(before, "InProgress") + 1, CountOf(after, "InProgress"));
+        }
+
+        private static int CountOf(SummaryDto summary, string key)
+        {
+            return summary.ByStatus.FirstOrDefault(item => item.Key == key)?.Count ?? 0;
+        }
+
         private async Task<List<Requests>> SeedSample()
         {
             using var scope = factory.Services.CreateScope();

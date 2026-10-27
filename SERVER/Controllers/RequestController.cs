@@ -15,50 +15,58 @@ namespace RMS.Controllers
             this.requestService = requestService;
         }
 
-        // פונקציית קבלת ערך דף הפניות לפי סינון
         [HttpGet]
+        [ProducesResponseType(typeof(PagedResult<RequestDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
         public Task<PagedResult<RequestDto>> Get([FromQuery] RequestQuery query, CancellationToken ct)
         {
             return requestService.Get(query, ct);
         }
 
-        //פונקציית קבלת פנייה מסוימת לפי מזהה
         [HttpGet("{id:int}")]
+        [ProducesResponseType(typeof(RequestDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
         public Task<RequestDto> Get(int id, CancellationToken ct)
         {
             return requestService.Get(id, ct);
         }
 
-        //פונקציית קבלת סכום של פניות לפי סטטוס ועדיפות
         [HttpGet("summary")]
+        [ProducesResponseType(typeof(SummaryDto), StatusCodes.Status200OK)]
         public Task<SummaryDto> Summary(CancellationToken ct)
         {
             return requestService.GetSummary(ct);
         }
 
-        //פונקציית קבלת הסטורייה של פנייה מסוימת
         [HttpGet("{id:int}/history")]
+        [ProducesResponseType(typeof(List<StatusHistoryDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
         public Task<List<StatusHistoryDto>> History(int id, CancellationToken ct)
         {
             return requestService.GetHistory(id, ct);
         }
 
-        //פונקציית עדכון סטטוס של פנייה מסוימת
         [HttpPut("{id:int}/status")]
+        [ProducesResponseType(typeof(RequestDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
         public Task<RequestDto> UpdateStatus(int id, [FromBody] UpdateStatusDto dto, CancellationToken ct)
         {
             return requestService.UpdateStatus(id, dto, ct);
         }
 
-        //פונקציית עדכון מספר פניות בזמן אחד
         [HttpPost("bulk-status")]
+        [ProducesResponseType(typeof(BulkStatusResultDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
         public Task<BulkStatusResultDto> BulkStatus([FromBody] BulkStatusDto dto, CancellationToken ct)
         {
             return requestService.UpdateBulk(dto, ct);
         }
 
-        //פונקצייה שיוצרת פניות חדשות לפי הערכים שבאובייקט שקיבלה
         [HttpPost("seed")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> Seed([FromBody] SeedDto dto, CancellationToken ct)
         {
             var count = await requestService.Seed(dto, ct);

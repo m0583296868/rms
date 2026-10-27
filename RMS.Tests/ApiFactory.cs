@@ -10,7 +10,8 @@ namespace RMS.Tests
 {
     public class ApiFactory : WebApplicationFactory<Program>
     {
-        private readonly SqliteConnection connection;
+        private readonly SqliteConnection keepAlive;
+        private readonly string connectionString;
 
         static ApiFactory()
         {
@@ -20,8 +21,10 @@ namespace RMS.Tests
 
         public ApiFactory()
         {
-            connection = new SqliteConnection("DataSource=:memory:");
-            connection.Open();
+            var name = "rms" + Guid.NewGuid().ToString("N");
+            connectionString = $"Data Source=file:{name}?mode=memory&cache=shared;Default Timeout=30";
+            keepAlive = new SqliteConnection(connectionString);
+            keepAlive.Open();
         }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -35,7 +38,9 @@ namespace RMS.Tests
                 foreach (var descriptor in remove)
                     services.Remove(descriptor);
 
-                services.AddDbContext<RmsDBContext>(options => options.UseSqlite(connection));
+                services.AddDbContext<RmsDBContext>(options => options
+                    .UseSqlite(connectionString)
+                    .AddInterceptors(new TestSaveInterceptor()));
             });
         }
 
@@ -52,7 +57,10 @@ namespace RMS.Tests
         {
             base.Dispose(disposing);
             if (disposing)
-                connection.Dispose();
+            {
+                keepAlive.Dispose();
+                SqliteConnection.ClearAllPools();
+            }
         }
     }
 }

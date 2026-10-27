@@ -188,6 +188,8 @@ export class ListRequestsComponent implements OnInit {
         row.draftStatus = this.nextStatuses(updated.status)[0] ?? '';
         this.conflictId = 0;
         this.loadSummary();
+        if (this.query.status && this.query.status !== updated.status)
+          this.loadRequests$.next();
       },
       error: (err: HttpErrorResponse) => {
         if (err.status === 409) this.conflictId = row.id;

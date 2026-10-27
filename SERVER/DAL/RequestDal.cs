@@ -32,7 +32,7 @@ namespace RMS.DAL
             if (!string.IsNullOrWhiteSpace(query.OrganizationName))
             {
                 var org = query.OrganizationName.Trim();
-                rows = rows.Where(r => r.OrganizationName.Contains(org));
+                rows = rows.Where(r => r.OrganizationName.StartsWith(org));
             }
 
             if (!string.IsNullOrWhiteSpace(query.AssignedTo))

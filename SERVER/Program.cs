@@ -48,7 +48,9 @@ app.UseExceptionHandler(errorApp =>
     errorApp.Run(async context =>
     {
         var ex = context.Features.Get<IExceptionHandlerFeature>()?.Error;
-        if (ex is OperationCanceledException)
+        if (ex is OperationCanceledException || context.RequestAborted.IsCancellationRequested)
+            return;
+        if (context.Response.HasStarted)
             return;
 
         var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();

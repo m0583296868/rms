@@ -12,6 +12,8 @@ namespace RMS.BL
     {
         public const string SummaryCacheKey = "requests-summary";
         private static readonly TimeSpan SummaryCacheTime = TimeSpan.FromMinutes(2);
+        private static readonly object SummaryGate = new();
+        private static int summaryGeneration;
         private static readonly string[] SortFields = { "createdAt", "updatedAt", "title", "organizationName", "priority", "status" };
 
         private readonly IRequestDal requestDal;
@@ -60,10 +62,15 @@ namespace RMS.BL
 
         public async Task<SummaryDto> GetSummary(CancellationToken ct)
         {
-            if (cache.TryGetValue(SummaryCacheKey, out SummaryDto? cached) && cached != null)
+            int seen;
+            lock (SummaryGate)
             {
-                logger.LogInformation("Summary cache hit");
-                return cached;
+                seen = summaryGeneration;
+                if (cache.TryGetValue(SummaryCacheKey, out SummaryDto? cached) && cached != null)
+                {
+                    logger.LogInformation("Summary cache hit");
+                    return cached;
+                }
             }
 
             var watch = Stopwatch.StartNew();
@@ -71,7 +78,12 @@ namespace RMS.BL
             watch.Stop();
             logger.LogInformation("Summary aggregation took {Ms} ms", watch.ElapsedMilliseconds);
 
-            cache.Set(SummaryCacheKey, summary, SummaryCacheTime);
+            lock (SummaryGate)
+            {
+                if (summaryGeneration == seen)
+                    cache.Set(SummaryCacheKey, summary, SummaryCacheTime);
+            }
+
             return summary;
         }
 
@@ -91,7 +103,7 @@ namespace RMS.BL
                 throw new AppValidationException("חסר גוף בקשה");
 
             var entity = await UpdateOne(requestDal, id, dto.Status, dto.Version, dto.ChangedBy, ct);
-            cache.Remove(SummaryCacheKey);
+            InvalidateSummary();
             return mapper.Map<RequestDto>(entity);
         }
 
@@ -173,7 +185,7 @@ namespace RMS.BL
             }
 
             if (result.Succeeded.Count > 0)
-                cache.Remove(SummaryCacheKey);
+                InvalidateSummary();
 
             logger.LogInformation(
                 "Bulk status update succeeded {Ok} failed {Fail}",
@@ -192,7 +204,7 @@ namespace RMS.BL
             var watch = Stopwatch.StartNew();
             var count = await requestDal.Seed(dto.Count, dto.Reset, ct);
             watch.Stop();
-            cache.Remove(SummaryCacheKey);
+            InvalidateSummary();
             logger.LogInformation("Seed finished. {Count} rows in {Ms} ms", count, watch.ElapsedMilliseconds);
             return count;
         }
@@ -230,7 +242,15 @@ namespace RMS.BL
         }
 
 
-//פנקציית בדיקת תקינות הquery
+        private void InvalidateSummary()
+        {
+            lock (SummaryGate)
+            {
+                summaryGeneration++;
+                cache.Remove(SummaryCacheKey);
+            }
+        }
+
         private static void ValidateQuery(RequestQuery query)
         {
             if (query.Page < 1)

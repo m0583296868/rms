@@ -45,7 +45,7 @@
     </mat-form-field>
     <mat-form-field appearance="outline">
       <mat-label>ארגון</mat-label>
-      <input matInput [(ngModel)]="organizationName" />
+      <input matInput [(ngModel)]="organizationName" placeholder="תחילת שם הארגון" />
     </mat-form-field>
     <mat-form-field appearance="outline">
       <mat-label>מטפל</mat-label>
@@ -96,7 +96,10 @@
     <div class="state"><mat-spinner diameter="36"></mat-spinner></div>
   }
   @if (error) {
-    <p class="error">{{ error }}</p>
+    <p class="error">
+      {{ error }}
+      <button mat-button (click)="reload()">נסה שוב</button>
+    </p>
   }
   @if (actionError) {
     <p class="error">{{ actionError }}</p>
@@ -199,7 +202,7 @@
   </section>
 
   <section class="bulk panel">
-    <span>עדכון מרוכז של המסומנות (עד 100). פנייה שנכשלת לא מבטלת את השאר.</span>
+    <span>עדכון מרוכז של המסומנות (עד 100). פנייה שנפסלת לפני השמירה לא מבטלת את השאר.</span>
     <mat-form-field appearance="outline">
       <mat-label>סטטוס חדש</mat-label>
       <mat-select [(ngModel)]="bulkStatus">
