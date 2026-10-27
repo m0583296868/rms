@@ -27,7 +27,7 @@ import { RequestHistoryComponent } from '../request-history/request-history.comp
     RequestHistoryComponent
   ],
   standalone: true,
-  templateUrl: './list-requests.component.html',
+  templateUrl: './list-requests.component.html', 
   styleUrl: './list-requests.component.css'
 })
 export class ListRequestsComponent implements OnInit {
