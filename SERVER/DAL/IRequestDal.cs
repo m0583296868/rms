@@ -8,7 +8,7 @@ namespace RMS.DAL
     public interface IRequestDal
     {
         Task<PagedResult<Requests>> Get(RequestQuery query, CancellationToken ct);
-        Task<Requests?> Get(int id, CancellationToken ct);
+        Task<Requests?> GetById(int id, CancellationToken ct);
         Task<SummaryDto> GetSummary(CancellationToken ct);
         Task<List<StatusHistories>> GetHistory(int requestId, CancellationToken ct);
         Task<List<Requests>> GetByIds(IReadOnlyCollection<int> ids, CancellationToken ct);

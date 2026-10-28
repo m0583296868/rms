@@ -26,9 +26,9 @@ namespace RMS.Controllers
         [HttpGet("{id:int}")]
         [ProducesResponseType(typeof(RequestDto), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-        public Task<RequestDto> Get(int id, CancellationToken ct)
+        public Task<RequestDto> GetById(int id, CancellationToken ct)
         {
-            return requestService.Get(id, ct);
+            return requestService.GetById(id, ct);
         }
 
         [HttpGet("summary")]

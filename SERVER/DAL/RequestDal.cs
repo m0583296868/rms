@@ -77,7 +77,7 @@ namespace RMS.DAL
             };
         }
 
-        public Task<Requests?> Get(int id, CancellationToken ct)
+        public Task<Requests?> GetById(int id, CancellationToken ct)
         {
             return rmsDBContext.requests.FirstOrDefaultAsync(r => r.Id == id, ct);
         }

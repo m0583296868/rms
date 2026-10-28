@@ -52,9 +52,9 @@ namespace RMS.BL
             };
         }
 
-        public async Task<RequestDto> Get(int id, CancellationToken ct)
+        public async Task<RequestDto> GetById(int id, CancellationToken ct)
         {
-            var entity = await requestDal.Get(id, ct);
+            var entity = await requestDal.GetById(id, ct);
             if (entity == null)
                 throw new NotFoundException("הפנייה לא נמצאה");
             return mapper.Map<RequestDto>(entity);
@@ -89,7 +89,7 @@ namespace RMS.BL
 
         public async Task<List<StatusHistoryDto>> GetHistory(int id, CancellationToken ct)
         {
-            var entity = await requestDal.Get(id, ct);
+            var entity = await requestDal.GetById(id, ct);
             if (entity == null)
                 throw new NotFoundException("הפנייה לא נמצאה");
 
@@ -220,7 +220,7 @@ namespace RMS.BL
             if (version < 1)
                 throw new AppValidationException("גרסה לא תקינה");
 
-            var entity = await dal.Get(id, ct);
+            var entity = await dal.GetById(id, ct);
             if (entity == null)
                 throw new NotFoundException("הפנייה לא נמצאה");
             if (entity.Version != version)

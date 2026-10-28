@@ -24,7 +24,9 @@
 dotnet run
 ```
 
-בהפעלה הראשונה נוצר בסיס הנתונים והטבלאות, כולל האינדקסים. השרת עולה על `http://localhost:5080`, ו-Swagger ב-`http://localhost:5080/swagger`.
+בהפעלה הראשונה נוצר בסיס הנתונים לפי המיגרציה `SERVER/Migrations`. השרת עולה על `http://localhost:5080`, ו-Swagger ב-`http://localhost:5080/swagger`.
+
+עדכון טבלאות הוא Code First: משנים את המחלקות או את `OnModelCreating`, ואז מתוך התיקייה `SERVER` מריצים `dotnet ef migrations add <שם>`. בהפעלה הבאה `Database.Migrate` מפעיל את המיגרציות שעדיין לא רצו.
 
 3. מהתיקייה `CLIENT`:
 
